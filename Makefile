@@ -27,6 +27,7 @@ help:
 	@echo "$(GREEN)Backend:$(NC)"
 	@echo "  make backend    - Start backend only"
 	@echo "  make backend-stop - Stop backend only"
+	@echo "  make backend-test - Start backend in test mode"
 	@echo ""
 	@echo "$(GREEN)Frontend:$(NC)"
 	@echo "  make frontend   - Start frontend only"
@@ -36,11 +37,20 @@ help:
 	@echo "  make db-reset   - Reset database and seed data"
 	@echo "  make db-migrate - Run database migrations"
 	@echo ""
+	@echo "$(GREEN)Testing:$(NC)"
+	@echo "  make test       - Run Playwright tests (with test backend)"
+	@echo "  make test-ui    - Run tests with UI"
+	@echo "  make test-report - Open test report"
+	@echo "  make test-install - Install Playwright browsers"
+	@echo "  make test-setup - Setup test environment"
+	@echo "  make test-full  - Complete test suite (setup + run + cleanup)"
+	@echo "  make test-quick - Quick test (chromium only)"
+	@echo ""
 	@echo "$(GREEN)Development:$(NC)"
 	@echo "  make install    - Install all dependencies"
 	@echo "  make build      - Build for production"
 	@echo "  make clean      - Clean all generated files"
-	@echo "  make test       - Test backend health"
+	@echo "  make health     - Test backend health"
 
 # Server Management
 .PHONY: start
@@ -93,6 +103,11 @@ backend:
 	@echo "$(BLUE)🔧 Starting backend server...$(NC)"
 	@cd $(PWD) && npx ts-node src/server.ts
 
+.PHONY: backend-test
+backend-test:
+	@echo "$(BLUE)🧪 Starting backend server in test mode...$(NC)"
+	@cd $(PWD) && NODE_ENV=test npx ts-node src/server.ts
+
 .PHONY: backend-stop
 backend-stop:
 	@echo "$(BLUE)🛑 Stopping backend server...$(NC)"
@@ -125,22 +140,30 @@ db-migrate:
 	@npx prisma migrate dev
 	@echo "$(GREEN)✅ Migrations completed!$(NC)"
 
-# Development Tools
-.PHONY: install
-install:
-	@echo "$(BLUE)📦 Installing dependencies...$(NC)"
-	@npm install
-	@cd client && npm install
-	@echo "$(GREEN)✅ Dependencies installed!$(NC)"
+# Testing
+.PHONY: test-setup
+test-setup:
+	@echo "$(BLUE)🧪 Setting up test environment...$(NC)"
+	@make stop
+	@sleep 2
+	@make backend-test &
+	@sleep 3
+	@make frontend &
+	@sleep 5
+	@echo "$(GREEN)✅ Test environment ready!$(NC)"
+	@echo "$(YELLOW)📱 Frontend: http://localhost:$(FRONTEND_PORT)$(NC)"
+	@echo "$(YELLOW)🔧 Backend (TEST): http://localhost:$(BACKEND_PORT)$(NC)"
 
 .PHONY: test
 test:
 	@echo "$(BLUE)🧪 Running browser tests...$(NC)"
+	@echo "$(YELLOW)⚠️  Make sure to run 'make test-setup' first!$(NC)"
 	@npx playwright test
 
 .PHONY: test-ui
 test-ui:
 	@echo "$(BLUE)🧪 Running browser tests with UI...$(NC)"
+	@echo "$(YELLOW)⚠️  Make sure to run 'make test-setup' first!$(NC)"
 	@npx playwright test --ui
 
 .PHONY: test-report
@@ -152,6 +175,35 @@ test-report:
 test-install:
 	@echo "$(BLUE)🔧 Installing Playwright browsers...$(NC)"
 	@npx playwright install
+
+.PHONY: test-full
+test-full:
+	@echo "$(BLUE)🧪 Running complete test suite...$(NC)"
+	@make stop
+	@sleep 2
+	@make backend-test &
+	@sleep 3
+	@make frontend &
+	@sleep 8
+	@echo "$(GREEN)✅ Test environment ready!$(NC)"
+	@npx playwright test
+	@make stop
+	@echo "$(GREEN)✅ Test suite completed!$(NC)"
+
+.PHONY: test-quick
+test-quick:
+	@echo "$(BLUE)🧪 Running quick test suite...$(NC)"
+	@echo "$(YELLOW)⚠️  Make sure servers are running with 'make test-setup'!$(NC)"
+	@npx playwright test --project=chromium
+	@echo "$(GREEN)✅ Quick test completed!$(NC)"
+
+# Development Tools
+.PHONY: install
+install:
+	@echo "$(BLUE)📦 Installing dependencies...$(NC)"
+	@npm install
+	@cd client && npm install
+	@echo "$(GREEN)✅ Dependencies installed!$(NC)"
 
 .PHONY: build
 build:
