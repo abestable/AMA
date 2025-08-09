@@ -27,12 +27,17 @@ export const authenticateToken = async (
       return;
     }
 
-    jwt.verify(token, securityConfig.jwt.secret);
+    const decoded = jwt.verify(token, securityConfig.jwt.secret) as jwt.JwtPayload;
+    const sessionId = decoded.jti;
+    if (!sessionId) {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
     
     // Verify session is still valid
     const session = await prisma.session.findFirst({
       where: {
-        token,
+        token: sessionId,
         isValid: true,
         expiresAt: {
           gt: new Date(),

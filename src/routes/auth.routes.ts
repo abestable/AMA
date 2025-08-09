@@ -2,10 +2,9 @@ import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { authenticateToken } from '../middleware/auth';
 import { authLimiter } from '../middleware/security';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Apply rate limiting to auth routes
 router.use(authLimiter);
@@ -47,6 +46,14 @@ router.post('/test/reset-database', async (req, res) => {
     await prisma.loginAttempt.deleteMany({});
     await prisma.session.deleteMany({});
     await prisma.auditLog.deleteMany({});
+    // Also remove any transient users created by tests to keep idempotency
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          in: ['newuser@example.com', 'testlogin@example.com']
+        }
+      }
+    });
     
     return res.json({ message: 'Database reset for testing' });
   } catch (error) {

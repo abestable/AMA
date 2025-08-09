@@ -16,14 +16,14 @@ Una webapp moderna con autenticazione sicura, database PostgreSQL e frontend Rea
 
 ### Backend
 - ✅ Node.js con Express e TypeScript
-- ✅ Database PostgreSQL con Prisma ORM
+- ✅ Database con Prisma ORM (SQLite in sviluppo, PostgreSQL raccomandato in produzione)
 - ✅ Validazione input con express-validator
 - ✅ Gestione errori centralizzata
 - ✅ Logging strutturato
 
 ### Frontend
 - ✅ React con TypeScript
-- ✅ Routing con React Router
+- ✅ Routing con React Router (login, register, dashboard)
 - ✅ Gestione stato con Context API
 - ✅ Form validation con react-hook-form
 - ✅ UI moderna con Tailwind CSS
@@ -56,10 +56,12 @@ cd ..
 
 ### 3. Configura il database
 
-Crea un database PostgreSQL:
-```sql
-CREATE DATABASE secure_webapp_db;
-```
+Di default il progetto usa SQLite per lo sviluppo rapido (file `prisma/dev.db`).
+
+Per usare PostgreSQL (raccomandato in produzione):
+1) Aggiorna `prisma/schema.prisma` impostando `provider = "postgresql"` e `url = env("DATABASE_URL")`
+2) Esporta `DATABASE_URL` nel `.env`
+3) Esegui le migrazioni
 
 ### 4. Configura le variabili d'ambiente
 
@@ -74,8 +76,8 @@ Modifica `.env` con le tue configurazioni:
 NODE_ENV=development
 PORT=3001
 
-# Database Configuration
-DATABASE_URL="postgresql://username:password@localhost:5432/secure_webapp_db"
+# Database Configuration (usato se imposti PostgreSQL)
+# DATABASE_URL="postgresql://username:password@localhost:5432/secure_webapp_db"
 
 # JWT Configuration
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
@@ -96,7 +98,7 @@ CORS_ORIGIN=http://localhost:3000
 # Genera il client Prisma
 npm run db:generate
 
-# Esegui le migrazioni
+# Esegui le migrazioni (crea tabelle per l'engine corrente)
 npm run db:migrate
 
 # Popola il database con dati di test
@@ -177,9 +179,9 @@ Dopo aver eseguito il seed, puoi usare questi account:
 - **Audit logging**: Tracciamento attività
 
 ### Frontend
-- **Token storage**: localStorage sicuro
-- **Auto refresh**: Refresh automatico token
-- **Route protection**: Protezione route private
+- **Token storage**: localStorage
+- **Auto refresh**: Refresh automatico token via Axios interceptor
+- **Route protection**: Protezione route private e redirect
 - **Form validation**: Validazione client-side
 - **Error handling**: Gestione errori user-friendly
 

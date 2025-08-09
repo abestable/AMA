@@ -41,28 +41,27 @@ export class AuthService {
     return bcrypt.compare(password, hash);
   }
 
-  // Generate JWT token
-  private static generateToken(userId: string): string {
-    // @ts-ignore - JWT types are complex, but this works
-    return jwt.sign(
-      { 
-        userId,
-        sessionId: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-      },
-      securityConfig.jwt.secret,
-      { expiresIn: securityConfig.jwt.expiresIn }
-    );
+  // Generate JWT token with proper typing and jti (sessionId)
+  private static generateToken(userId: string, sessionId: string, expiresInSeconds: number): string {
+    const payload: jwt.JwtPayload = {
+      sub: userId,
+      jti: sessionId,
+    };
+    return jwt.sign(payload, securityConfig.jwt.secret, { expiresIn: expiresInSeconds });
   }
 
   // Create session
-  private static async createSession(userId: string, token: string, ipAddress?: string, userAgent?: string): Promise<void> {
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours
-
+  private static async createSession(
+    userId: string,
+    sessionId: string,
+    expiresAt: Date,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<void> {
     await prisma.session.create({
       data: {
         userId,
-        token,
+        token: sessionId,
         expiresAt,
         ipAddress: ipAddress || null,
         userAgent: userAgent || null,
@@ -121,9 +120,11 @@ export class AuthService {
       },
     });
 
-    // Generate token and session
-    const token = this.generateToken(user.id);
-    await this.createSession(user.id, token, ipAddress, userAgent);
+    // Compute session expiry aligned with JWT_EXPIRES_IN
+    const expiresAt = this.computeExpiryDate(securityConfig.jwt.expiresIn);
+    const sessionId = this.generateSessionId();
+    const token = this.generateToken(user.id, sessionId, this.computeExpirySeconds(securityConfig.jwt.expiresIn));
+    await this.createSession(user.id, sessionId, expiresAt, ipAddress, userAgent);
 
     // Log successful registration
     await this.logLoginAttempt(email, true, user.id, ipAddress, userAgent);
@@ -138,7 +139,7 @@ export class AuthService {
         role: user.role,
       },
       token,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      expiresAt,
     };
   }
 
@@ -164,8 +165,10 @@ export class AuthService {
     }
 
     // Generate token and session
-    const token = this.generateToken(user.id);
-    await this.createSession(user.id, token, ipAddress, userAgent);
+    const expiresAt = this.computeExpiryDate(securityConfig.jwt.expiresIn);
+    const sessionId = this.generateSessionId();
+    const token = this.generateToken(user.id, sessionId, this.computeExpirySeconds(securityConfig.jwt.expiresIn));
+    await this.createSession(user.id, sessionId, expiresAt, ipAddress, userAgent);
 
     // Update last login
     await prisma.user.update({
@@ -186,7 +189,7 @@ export class AuthService {
         role: user.role,
       },
       token,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      expiresAt,
     };
   }
 
@@ -228,7 +231,9 @@ export class AuthService {
     }
 
     // Generate new token
-    const newToken = this.generateToken(session.user.id);
+    const expiresAt = this.computeExpiryDate(securityConfig.jwt.expiresIn);
+    const newSessionId = this.generateSessionId();
+    const newToken = this.generateToken(session.user.id, newSessionId, this.computeExpirySeconds(securityConfig.jwt.expiresIn));
     
     // Invalidate old session and create new one
     await prisma.session.update({
@@ -236,7 +241,13 @@ export class AuthService {
       data: { isValid: false },
     });
 
-    await this.createSession(session.user.id, newToken, session.ipAddress || undefined, session.userAgent || undefined);
+    await this.createSession(
+      session.user.id,
+      newSessionId,
+      expiresAt,
+      session.ipAddress || undefined,
+      session.userAgent || undefined
+    );
 
     return {
       user: {
@@ -248,7 +259,7 @@ export class AuthService {
         role: session.user.role,
       },
       token: newToken,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      expiresAt,
     };
   }
 
@@ -302,5 +313,37 @@ export class AuthService {
         passwordResetExpires: null,
       },
     });
+  }
+
+  // Helpers
+  private static generateSessionId(): string {
+    return crypto.randomBytes(16).toString('hex');
+  }
+
+  private static computeExpiryDate(expiresIn: string | number): Date {
+    const now = Date.now();
+    let ms: number;
+    if (typeof expiresIn === 'number') {
+      ms = expiresIn * 1000;
+    } else {
+      // handle strings like '24h', '15m', '7d'
+      const match = /^(\d+)([smhd])$/.exec(expiresIn);
+      if (!match) {
+        // Fallback to 24h
+        ms = 24 * 60 * 60 * 1000;
+      } else {
+        const value = parseInt(match[1], 10);
+        const unit = match[2];
+        const multipliers: Record<string, number> = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+        ms = value * multipliers[unit];
+      }
+    }
+    return new Date(now + ms);
+  }
+
+  private static computeExpirySeconds(expiresIn: string | number): number {
+    const date = this.computeExpiryDate(expiresIn);
+    const seconds = Math.ceil((date.getTime() - Date.now()) / 1000);
+    return Math.max(seconds, 1);
   }
 }

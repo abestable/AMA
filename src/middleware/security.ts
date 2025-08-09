@@ -32,14 +32,26 @@ export const authLimiter = rateLimit({
 
 // Security headers middleware
 export const securityHeaders = helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
+  contentSecurityPolicy: process.env.NODE_ENV === 'production'
+    ? {
+        useDefaults: true,
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'", 'http://localhost:3001'],
+        },
+      }
+    : {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          connectSrc: ["'self'", 'http://localhost:3001'],
+        },
+      },
   hsts: {
     maxAge: 31536000,
     includeSubDomains: true,
@@ -80,9 +92,8 @@ export const sanitizeInput = (req: Request, _res: Response, next: NextFunction):
     return obj;
   };
 
+  // Only sanitize strings in body to reduce risk of altering query/params semantics
   req.body = sanitize(req.body);
-  req.query = sanitize(req.query);
-  req.params = sanitize(req.params);
   
   next();
 };

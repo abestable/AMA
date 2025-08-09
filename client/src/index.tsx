@@ -141,6 +141,18 @@ const suppressResizeObserverError = () => {
 // Apply the suppression
 suppressResizeObserverError();
 
+// Hide CRA/Webpack overlay to avoid intercepting pointer events in automated tests
+const hideOverlay = () => {
+  const iframe = document.getElementById('webpack-dev-server-client-overlay') as HTMLIFrameElement | null;
+  if (iframe && iframe.style) {
+    iframe.style.display = 'none';
+    iframe.style.pointerEvents = 'none';
+  }
+};
+const overlayObserver = new MutationObserver(() => hideOverlay());
+overlayObserver.observe(document.documentElement, { childList: true, subtree: true });
+hideOverlay();
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
