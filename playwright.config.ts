@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const managedServers = Boolean(process.env.MANAGED_SERVERS);
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -42,10 +44,16 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: 'NODE_ENV=test make start',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  // When MANAGED_SERVERS is set, Makefile handles starting/stopping servers
+  // and we tell Playwright not to spawn its own webServer.
+  ...(managedServers
+    ? {}
+    : {
+        webServer: {
+          command: 'NODE_ENV=test make start',
+          url: 'http://localhost:3000',
+          reuseExistingServer: !process.env.CI,
+          timeout: 120 * 1000,
+        },
+      }),
 });

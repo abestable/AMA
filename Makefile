@@ -156,9 +156,30 @@ test-setup:
 
 .PHONY: test
 test:
-	@echo "$(BLUE)🧪 Running browser tests...$(NC)"
-	@echo "$(YELLOW)⚠️  Make sure to run 'make test-setup' first!$(NC)"
-	@npx playwright test
+	@echo "$(BLUE)🧪 Running complete browser tests with managed servers...$(NC)"
+	@echo "$(BLUE)🛑 Ensuring no previous servers are running...$(NC)"
+	@make stop
+	@sleep 2
+	@echo "$(BLUE)🔧 Starting backend in TEST mode (nohup)...$(NC)"
+	@mkdir -p logs
+	@nohup sh -c 'NODE_ENV=test npx ts-node src/server.ts' > logs/backend.test.log 2>&1 &
+	@echo "$(BLUE)📱 Starting frontend (nohup)...$(NC)"
+	@nohup sh -c 'cd client && npm start' > logs/frontend.test.log 2>&1 &
+	@echo "$(BLUE)⏳ Waiting for servers to be ready...$(NC)"
+	@timeout=60; \
+	while ! curl -s http://localhost:$(BACKEND_PORT)/health >/dev/null 2>&1; do \
+	  sleep 1; timeout=$$((timeout-1)); [ $$timeout -le 0 ] && { echo "$(RED)Backend did not start in time$(NC)"; exit 1; }; \
+	done; \
+	echo "$(GREEN)✅ Backend is up$(NC)"; \
+	timeout=60; \
+	while ! curl -s http://localhost:$(FRONTEND_PORT) >/dev/null 2>&1; do \
+	  sleep 1; timeout=$$((timeout-1)); [ $$timeout -le 0 ] && { echo "$(RED)Frontend did not start in time$(NC)"; exit 1; }; \
+	done; \
+	echo "$(GREEN)✅ Frontend is up$(NC)";
+	@echo "$(GREEN)✅ Test environment ready!$(NC)"
+	@echo "$(YELLOW)📱 Frontend: http://localhost:$(FRONTEND_PORT)$(NC)"
+	@echo "$(YELLOW)🔧 Backend (TEST): http://localhost:$(BACKEND_PORT)$(NC)"
+	@sh -c 'MANAGED_SERVERS=1 npx playwright test; status=$$?; echo "$(BLUE)🛑 Stopping servers...$(NC)"; make stop; exit $$status'
 
 .PHONY: test-ui
 test-ui:
